@@ -1,0 +1,20 @@
+{
+  "name": "pondgraph",
+  "version": "0.0.1",
+  "description": "Object trace/analysis tool",
+  "main": "index.js",
+  "repository": "kek",
+  "author": "Tony Ivanov <telamohn@pm.me>",
+  "license": "AGPL-3.0-or-later",
+  "private": false,
+  "scripts": {
+    "test": "tape test.js",
+    "debug": "node inspect $(npm bin)/tape test.js"
+  },
+  "dependencies": {
+    "save-our-sanity": "^1.0.1"
+  },
+  "devDependencies": {
+    "tape": "^4.11.0"
+  }
+}
