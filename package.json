@@ -5,7 +5,7 @@
   "main": "index.js",
   "repository": "kek",
   "author": "Tony Ivanov <telamohn@pm.me>",
-  "license": "AGPL-3.0-or-later",
+  "license": "GPL-3.0-or-later",
   "private": false,
   "scripts": {
     "test": "tape test.js",
