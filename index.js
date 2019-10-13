@@ -1,5 +1,5 @@
 const sos = require('save-our-sanity')
-const { relative } = require('path')
+const { relative, basename } = require('path')
 
 class PondGraph {
   constructor (opts = {}) {
@@ -16,21 +16,24 @@ class PondGraph {
         try {
           throw new Error()
         } catch (e) { trace = e.stack.split('\n') }
-
-        if (!trace[4]) throw new Error('Stacktrace is borked', trace)
-        const exp = /\s+at ([^ ]+) (?:\[as (.+)\] )?\((.*):\d+:\d+\)/
-
-        const m = trace[4].match(exp)
+        const traceLvl = 3
+        if (!trace[traceLvl]) throw new Error('Stacktrace is borked', trace)
+        const exp = /\s+at ((?:new )?[^ ]+) (?:\[as (.+)\] )?\((.*):\d+:\d+\)/
+        let m = trace[traceLvl].match(exp)
 
         if (!m) {
-          // debugger
-          throw new Error(`Unsupported trace line\n"${trace[4]}"`)
+          const fallback = trace[traceLvl].match(/\s+at (\/.+)(:\d+:\d+)/)
+          if (!fallback) {
+            debugger
+            throw new Error(`Unsupported trace line\n"${trace[4]}"`)
+          }
+          m = [null, basename(fallback[1])+fallback[2], null, fallback[1]]
         }
 
         const caller = m[1]
         const path = m[3]
         const rpath = relative(this.root, path)
-        const interaction = { caller, prop, op, value, ptime: process.uptime() }
+        const interaction = { caller, prop, op, value, ptime: process.uptime(), label }
         this.interactions.push(interaction)
         this.targets.push([label, prop])
         this.sources.push([rpath, caller])
@@ -70,8 +73,8 @@ class PondGraph {
 
     lines.push('// interactions / events')
     lines.push('{ node[fillcolor=SkyBlue,shape=oval]')
-    for (const {caller, prop, op} of events) {
-      lines.push(`"${caller}" -> "${prop}"[label="${op}"];`)
+    for (const {caller, prop, op, ptime} of events) {
+      lines.push(`"${caller}" -> "${prop}"[label="${op} @${Math.floor(ptime*100)}ms)"];`)
     }
     lines.push('}')
 
@@ -86,6 +89,64 @@ class PondGraph {
 
     lines.push('}')
     return lines.join('\n')
+  }
+
+  dumpDot (fname) {
+    return require('fs').writeFileSync('/tmp/test.dot', this.toDot())
+  }
+
+  toMermaid (opts) {
+    const { sources, targets, events } = this._preGraph()
+    const lines = []
+    lines.push('graph BT')
+    const subg = targets.reduce((lut, pair) => {
+      lut[pair[0]] = lut[pair[0]] || []
+      lut[pair[0]].push(pair[1])
+      return lut
+    }, {})
+
+    const entids = {}
+    let ctr = 0
+    function srcDesc (src) {
+      const key = `s:${src}`
+      if (entids[key]) return entids[key]
+      const id = `n${ctr++}`
+      entids[key] = id
+      return `${id}[${src}]`
+    }
+
+    function evDesc (n) {
+      const key = `s:${n}`
+      if (entids[key]) return entids[key]
+      const id = `f${ctr++}`
+      entids[key] = id
+      return `${id}(${n})`
+    }
+
+    Object.keys(subg).forEach(tgt => {
+      lines.push(`subgraph ${tgt}`)
+      for (const prop of subg[tgt]) {
+        lines.push(`  ${prop}`)
+      }
+      lines.push('end')
+    })
+
+    for (const src of sources) {
+      lines.push(`${srcDesc(src[0])} --> ${evDesc(src[1])}`)
+    }
+
+    // TODO: this works for single inspections, missing ev.label mapping to correct object
+    // if two objects share the same named props.
+    for (const ev of events) {
+      lines.push(`${evDesc(ev.caller)}--${ev.op}-->${ev.prop}`)
+    }
+
+    return lines.join('\n')
+  }
+  mermaidUrl (mode = 'view') {
+    const code = this.toMermaid()
+    const state = Buffer.from(JSON.stringify({ code, mermaid: { theme: 'default' }})).toString('base64')
+    return `https://mermaidjs.github.io/mermaid-live-editor/#/${mode}/${state}`
   }
 }
 
