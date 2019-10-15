@@ -18,22 +18,23 @@ class PondGraph {
         } catch (e) { trace = e.stack.split('\n') }
         const traceLvl = 3
         if (!trace[traceLvl]) throw new Error('Stacktrace is borked', trace)
-        const exp = /\s+at ((?:new )?[^ ]+) (?:\[as (.+)\] )?\((.*):\d+:\d+\)/
+        const exp = /\s+at ((?:new )?[^ ]+) (?:\[as (.+)\] )?\((.*):(\d+):\d+\)/
         let m = trace[traceLvl].match(exp)
 
         if (!m) {
           const fallback = trace[traceLvl].match(/\s+at (\/.+)(:\d+:\d+)/)
           if (!fallback) {
-            debugger
             throw new Error(`Unsupported trace line\n"${trace[4]}"`)
           }
-          m = [null, basename(fallback[1])+fallback[2], null, fallback[1]]
+          const ln = fallback[2].match(/:(\d+):/)[1]
+          m = [null, basename(fallback[1])+fallback[2], null, fallback[1], ln]
         }
 
         const caller = m[1]
         const path = m[3]
         const rpath = relative(this.root, path)
-        const interaction = { caller, prop, op, value, ptime: process.uptime(), label }
+        const line = m[4]
+        const interaction = { caller, prop, op, value, ptime: process.uptime(), label, line }
         this.interactions.push(interaction)
         this.targets.push([label, prop])
         this.sources.push([rpath, caller])
@@ -138,7 +139,7 @@ class PondGraph {
     // TODO: this works for single inspections, missing ev.label mapping to correct object
     // if two objects share the same named props.
     for (const ev of events) {
-      lines.push(`${evDesc(ev.caller)}--${ev.op}-->${ev.prop}`)
+      lines.push(`${evDesc(ev.caller)}--"${ev.op} (ln${ev.line})"-->${ev.prop}`)
     }
 
     return lines.join('\n')
